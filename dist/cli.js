@@ -1674,6 +1674,20 @@ function createMcp(api) {
     ({ stuckId, resolution }) => result(() => api.command({ type: "stuck.resolve", stuckId, resolution }))
   );
   server.registerTool(
+    "ctf_create_target",
+    {
+      description: "Register a target (a challenge, or an in-scope host/app) in the workspace so the team can coordinate on it and other target tools can reference its id. ADMIN-ONLY, and the label MUST already be within the workspace\u2019s configured scope \u2014 this is an authorization boundary: an arbitrary or out-of-scope target is refused (a non-admin or out-of-scope call returns an error, not a target). Records coordination data only; it does not scan, reach, or execute anything. Reuse an existing target (see ctf_sync) instead of creating a duplicate.",
+      inputSchema: {
+        label: Label,
+        description: Body,
+        category: z2.enum(["web", "reverse", "crypto", "forensics", "misc"]).optional()
+      }
+    },
+    ({ label, description, category }) => result(
+      () => api.command({ type: "target.create", label, description, category: category ?? "misc" })
+    )
+  );
+  server.registerTool(
     "ctf_create_task",
     {
       description: "Record a task explicitly created by the human participant. Inspect existing tasks first. Records coordination data only; does not execute work or generate testing objectives.",

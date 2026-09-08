@@ -503,6 +503,22 @@ export function createMcp(api: BrainApi) {
       result(() => api.command({ type: 'stuck.resolve', stuckId, resolution })),
   );
   server.registerTool(
+    'ctf_create_target',
+    {
+      description:
+        'Register a target (a challenge, or an in-scope host/app) in the workspace so the team can coordinate on it and other target tools can reference its id. ADMIN-ONLY, and the label MUST already be within the workspace’s configured scope — this is an authorization boundary: an arbitrary or out-of-scope target is refused (a non-admin or out-of-scope call returns an error, not a target). Records coordination data only; it does not scan, reach, or execute anything. Reuse an existing target (see ctf_sync) instead of creating a duplicate.',
+      inputSchema: {
+        label: Label,
+        description: Body,
+        category: z.enum(['web', 'reverse', 'crypto', 'forensics', 'misc']).optional(),
+      },
+    },
+    ({ label, description, category }) =>
+      result(() =>
+        api.command({ type: 'target.create', label, description, category: category ?? 'misc' }),
+      ),
+  );
+  server.registerTool(
     'ctf_create_task',
     {
       description:
