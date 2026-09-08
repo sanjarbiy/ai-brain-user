@@ -15,7 +15,7 @@ Your CLI agent is the **orchestrator**. This MCP talks to your team's backend ("
 ## Install
 
 ```bash
-git clone https://github.com/<your-org>/ctf-brain-user
+git clone https://github.com/sanjarbiy/ctf-brain-user
 cd ctf-brain-user
 npm install
 ```
