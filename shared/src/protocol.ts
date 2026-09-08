@@ -160,6 +160,9 @@ export const Command = z.discriminatedUnion('type', [
   z.object({ type: z.literal('stuck.resolve'), stuckId: Id, resolution: Body }).strict(),
   z.object({ type: z.literal('notification.read'), notificationId: Id }).strict(),
   z.object({ type: z.literal('target.addAlias'), targetId: Id, alias: Label }).strict(),
+  z
+    .object({ type: z.literal('workspace.setScope'), scope: z.array(Label).min(1).max(200) })
+    .strict(),
 ]);
 export type Command = z.infer<typeof Command>;
 export const Envelope = z.object({ idempotencyKey: Id, command: Command }).strict();

@@ -854,7 +854,8 @@ var Command = z.discriminatedUnion("type", [
   }).strict(),
   z.object({ type: z.literal("stuck.resolve"), stuckId: Id, resolution: Body }).strict(),
   z.object({ type: z.literal("notification.read"), notificationId: Id }).strict(),
-  z.object({ type: z.literal("target.addAlias"), targetId: Id, alias: Label }).strict()
+  z.object({ type: z.literal("target.addAlias"), targetId: Id, alias: Label }).strict(),
+  z.object({ type: z.literal("workspace.setScope"), scope: z.array(Label).min(1).max(200) }).strict()
 ]);
 var Envelope = z.object({ idempotencyKey: Id, command: Command }).strict();
 var WorkspaceInput = z.object({ name: Label, description: Body, scope: z.array(Label).min(1).max(200) }).strict();
@@ -1686,6 +1687,14 @@ function createMcp(api) {
     ({ label, description, category }) => result(
       () => api.command({ type: "target.create", label, description, category: category ?? "misc" })
     )
+  );
+  server.registerTool(
+    "ctf_set_scope",
+    {
+      description: 'ADMIN-ONLY. Replace this workspace\u2019s scope allowlist \u2014 the labels ctf_create_target authorizes against. Each entry is an exact host/app label, a parent domain ("sixt.com" authorizes "api.sixt.com"), or "*" to allow all. Coordination/config only; changes no target and reaches no host.',
+      inputSchema: { scope: z2.array(Label).min(1).max(200) }
+    },
+    ({ scope }) => result(() => api.command({ type: "workspace.setScope", scope }))
   );
   server.registerTool(
     "ctf_create_task",

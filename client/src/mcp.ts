@@ -519,6 +519,15 @@ export function createMcp(api: BrainApi) {
       ),
   );
   server.registerTool(
+    'ctf_set_scope',
+    {
+      description:
+        'ADMIN-ONLY. Replace this workspace’s scope allowlist — the labels ctf_create_target authorizes against. Each entry is an exact host/app label, a parent domain ("sixt.com" authorizes "api.sixt.com"), or "*" to allow all. Coordination/config only; changes no target and reaches no host.',
+      inputSchema: { scope: z.array(Label).min(1).max(200) },
+    },
+    ({ scope }) => result(() => api.command({ type: 'workspace.setScope', scope })),
+  );
+  server.registerTool(
     'ctf_create_task',
     {
       description:
