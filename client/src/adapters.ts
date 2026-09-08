@@ -1,4 +1,4 @@
-// Participant AI adapters (specification section 6). CTF Brain is not coupled to one AI vendor.
+// Participant AI adapters (specification section 6). AI Brain is not coupled to one AI vendor.
 // Each client (Claude, Codex, Agy, a generic MCP client, or our own agent) is wrapped by an adapter
 // implementing one interface. External clients that cannot accept a background task are NOT faked:
 // their adapter queues the task, notifies the user, and lets the task surface through the MCP inbox
@@ -61,7 +61,7 @@ export class QueueingAdapter implements ParticipantAgentAdapter {
   }
 }
 
-// Our own CTF Brain agent can accept and run a structured task directly through the relay.
+// Our own AI Brain agent can accept and run a structured task directly through the relay.
 export class CtfBrainAdapter implements ParticipantAgentAdapter {
   constructor(
     public name: string,
