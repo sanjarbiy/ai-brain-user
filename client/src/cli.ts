@@ -44,7 +44,7 @@ async function secret(prompt: string) {
 }
 async function main() {
   if (command === 'help') {
-    print(`CTF Brain participant agent 0.1.0
+    print(`AI Brain participant agent 0.1.0
 
 install --server URL        Create local configuration (no system changes)
 login                      Sign in; encrypted token expires after 8 hours
