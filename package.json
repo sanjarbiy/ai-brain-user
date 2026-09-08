@@ -1,0 +1,26 @@
+{
+  "name": "ctf-brain-user",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Participant client + stdio MCP server for CTF Brain / MCP Console — connect your CLI agent (Claude Code, Codex, ...) to your team's shared offensive-intelligence workspace.",
+  "scripts": {
+    "mcp": "tsx client/src/cli.ts mcp",
+    "ctf": "tsx client/src/cli.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.0",
+    "ws": "^8.18.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.18.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
