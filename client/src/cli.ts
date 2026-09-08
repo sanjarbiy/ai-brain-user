@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes } from 'node:crypto';
 import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 import { z } from 'zod';
@@ -18,6 +18,22 @@ const option = (name: string) => {
   return index >= 0 ? args[index + 1] : undefined;
 };
 const stateDir = resolve(option('state-dir') || process.env.BRAIN_STATE_DIR || 'data/agent');
+// Stable per-computer device id, stored beside the state so a personal API key locks to THIS machine
+// (the server binds it trust-on-first-use). Generated once; copying the token alone to another computer
+// will not carry this id, so the key is rejected there.
+async function getDeviceId(): Promise<string> {
+  const file = resolve(stateDir, 'device.id');
+  try {
+    const existing = (await readFile(file, 'utf8')).trim();
+    if (/^[A-Za-z0-9_-]{16,128}$/.test(existing)) return existing;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+  }
+  const id = randomBytes(32).toString('base64url');
+  await mkdir(stateDir, { recursive: true, mode: 0o700 });
+  await writeFile(file, id, { mode: 0o600 });
+  return id;
+}
 let local: LocalState | undefined;
 const state = () =>
   (local ??= new LocalState(resolve(stateDir, 'state.sqlite'), process.env.BRAIN_VAULT_KEY || ''));
@@ -192,7 +208,12 @@ until you start it — there is no background terminal surveillance or unsolicit
     : process.env.BRAIN_VAULT_KEY
       ? state().get(`session:${config.server}`)
       : undefined;
-  const api = new BrainApi(config.server, session?.token || '', config.ctfId || '');
+  const api = new BrainApi(
+    config.server,
+    session?.token || '',
+    config.ctfId || '',
+    await getDeviceId(),
+  );
   if (command === 'doctor') {
     const checks: any = {
       node: process.version,
