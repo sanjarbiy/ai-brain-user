@@ -18,7 +18,7 @@ npm install
 
 ## 1. Add your keys (one-time)
 
-On the **Settings** page, add at least **3 OpenRouter keys + 1 Jina key** — or from the CLI:
+On the **Settings** page, add one OpenRouter key for **each task tier** — high priority (deep reasoning), medium/low (chat + memory), and images (vision) — plus **one Jina key** (web research). You can add more keys to any tier for extra rate-limit failover. From the CLI:
 
 ```bash
 node --import tsx client/src/cli.ts keys
