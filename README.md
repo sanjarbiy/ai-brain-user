@@ -1,4 +1,4 @@
-# ctf-brain-user — participant client (MCP)
+# ai-brain-user — participant client (MCP)
 
 A stdio **MCP server** you connect to your CLI agent (Claude Code, Codex, Google Antigravity, or any MCP-capable agent) to work in your team's shared workspace.
 
@@ -11,8 +11,8 @@ A stdio **MCP server** you connect to your CLI agent (Claude Code, Codex, Google
 ## Install
 
 ```bash
-git clone https://github.com/sanjarbiy/ctf-brain-user
-cd ctf-brain-user
+git clone https://github.com/sanjarbiy/ai-brain-user
+cd ai-brain-user
 npm install
 ```
 
@@ -33,7 +33,7 @@ On **Settings → Connect API keys**, generate a key (shown once — copy it). I
 The MCP server is always the same command:
 
 ```
-node --import tsx <ABSOLUTE-PATH>/ctf-brain-user/client/src/cli.ts mcp
+node --import tsx <ABSOLUTE-PATH>/ai-brain-user/client/src/cli.ts mcp
 ```
 
 with these env vars (use an **absolute** `BRAIN_STATE_DIR` — `~` is not expanded by every agent):
@@ -53,7 +53,7 @@ claude mcp add mcp-console \
   --env BRAIN_TOKEN=mcp_your_generated_key \
   --env BRAIN_STATE_DIR=$HOME/.mcp-console \
   --env BRAIN_VAULT_KEY=$(openssl rand -hex 32) \
-  -- node --import tsx /absolute/path/ctf-brain-user/client/src/cli.ts mcp
+  -- node --import tsx /absolute/path/ai-brain-user/client/src/cli.ts mcp
 ```
 
 Restart Claude Code.
@@ -68,7 +68,7 @@ codex mcp add mcp-console \
   --env BRAIN_TOKEN=mcp_your_generated_key \
   --env BRAIN_STATE_DIR=/home/you/.mcp-console \
   --env BRAIN_VAULT_KEY=<64-hex> \
-  -- node --import tsx /absolute/path/ctf-brain-user/client/src/cli.ts mcp
+  -- node --import tsx /absolute/path/ai-brain-user/client/src/cli.ts mcp
 ```
 
 **Option B — edit `~/.codex/config.toml`** (Windows: `C:\Users\you\.codex\config.toml`):
@@ -76,7 +76,7 @@ codex mcp add mcp-console \
 ```toml
 [mcp_servers.mcp-console]
 command = "node"
-args = ["--import", "tsx", "/absolute/path/ctf-brain-user/client/src/cli.ts", "mcp"]
+args = ["--import", "tsx", "/absolute/path/ai-brain-user/client/src/cli.ts", "mcp"]
 startup_timeout_sec = 60   # tsx compiles TS on first launch; raise from the default 10s
 
 [mcp_servers.mcp-console.env]
@@ -97,7 +97,7 @@ Edit `~/.gemini/config/mcp_config.json` (Windows: `C:\Users\you\.gemini\config\m
   "mcpServers": {
     "mcp-console": {
       "command": "node",
-      "args": ["--import", "tsx", "/absolute/path/ctf-brain-user/client/src/cli.ts", "mcp"],
+      "args": ["--import", "tsx", "/absolute/path/ai-brain-user/client/src/cli.ts", "mcp"],
       "env": {
         "BRAIN_SERVER": "https://your-team-server.example",
         "BRAIN_TOKEN": "mcp_your_generated_key",
