@@ -138,8 +138,9 @@ export function createMcp(api: BrainApi) {
       inputSchema: {
         question: z
           .string()
+          .trim()
           .min(3)
-          .max(2000)
+          .max(20000)
           .describe(
             'The offensive question to research, as specific as you can make it — the exact target/tech/version, the observed behaviour, and what you want (an exploit path, a CVE, a bypass). Sharper questions get sharper answers.',
           ),
@@ -171,7 +172,9 @@ export function createMcp(api: BrainApi) {
             throw new Error(`No target "${target}" in this workspace — use a label or UUID from ctf_sync.`);
           targetId = match.id;
         }
-        return api.request(api.path('consult'), 'POST', { question, queries, targetId });
+        // Deep research legitimately takes far longer than the 15s default; give it a generous
+        // budget so the client does not abort a healthy consult ("operation aborted due to timeout").
+        return api.request(api.path('consult'), 'POST', { question, queries, targetId }, 120000);
       }),
   );
   server.registerTool(
@@ -228,8 +231,9 @@ export function createMcp(api: BrainApi) {
       inputSchema: {
         objective: z
           .string()
+          .trim()
           .min(3)
-          .max(2000)
+          .max(20000)
           .describe(
             'A concrete goal for the autonomous solve, e.g. "capture the flag on WEB-01 via the login form" or "get RCE on the upload endpoint and read /flag". The brain drives command-by-command toward this.',
           ),

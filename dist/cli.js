@@ -1371,7 +1371,7 @@ function createMcp(api) {
     {
       description: "Consult the AI Brain backend \u2014 a powerful server-side offensive researcher/solver running on YOUR OpenRouter and Jina credentials. Send an authorized-CTF question when you want deep multi-hop web research, CVE/exploit lookups, or a candidate solution path for a target. The brain checks team knowledge first, then researches autonomously and returns sourced facts, hypotheses, and concrete next offensive steps; the result is persisted as reusable team knowledge (RESEARCHED provenance). Provide focused `queries` when you can; omit them and the brain derives them from the question. You still execute locally \u2014 this returns research and solutions, not actions.",
       inputSchema: {
-        question: z2.string().min(3).max(2e3).describe(
+        question: z2.string().trim().min(3).max(2e4).describe(
           "The offensive question to research, as specific as you can make it \u2014 the exact target/tech/version, the observed behaviour, and what you want (an exploit path, a CVE, a bypass). Sharper questions get sharper answers."
         ),
         queries: z2.array(z2.string().min(1).max(300)).max(5).optional().describe(
@@ -1392,7 +1392,7 @@ function createMcp(api) {
           throw new Error(`No target "${target2}" in this workspace \u2014 use a label or UUID from ctf_sync.`);
         targetId = match.id;
       }
-      return api.request(api.path("consult"), "POST", { question, queries, targetId });
+      return api.request(api.path("consult"), "POST", { question, queries, targetId }, 12e4);
     })
   );
   server.registerTool(
@@ -1441,7 +1441,7 @@ function createMcp(api) {
     {
       description: "Delegate a target to the backend offensive brain and let it drive to the flag autonomously. The brain runs server-side on YOUR keys with the offensive agent prompt and decides each command; the command executes LOCALLY on this machine (where the target is reachable), and its real output is fed back for the next decision. Every step is documented on the server so the whole team sees who is working what and how. Returns the full transcript (commands + outputs) plus the flag and a bug-bounty-style writeup. Pass `target` as the target LABEL (e.g. WEB-01) or its UUID, and a concrete objective. Requires you to have submitted your keys (`ctf keys`).",
       inputSchema: {
-        objective: z2.string().min(3).max(2e3).describe(
+        objective: z2.string().trim().min(3).max(2e4).describe(
           'A concrete goal for the autonomous solve, e.g. "capture the flag on WEB-01 via the login form" or "get RCE on the upload endpoint and read /flag". The brain drives command-by-command toward this.'
         ),
         target: z2.string().min(1).max(120).optional().describe("Target LABEL (e.g. WEB-01) or UUID from ctf_sync that the objective is about."),
