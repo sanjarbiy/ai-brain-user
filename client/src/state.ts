@@ -1,8 +1,28 @@
-import { DatabaseSync } from 'node:sqlite';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { type Command } from '../../shared/src/protocol.ts';
+
+// node:sqlite is a Node >=22.5 built-in. Load it LAZILY (via a sync require, only when local state is
+// actually constructed) so importing this module — and therefore the whole CLI / MCP server — does NOT
+// crash at import time on older Node. Callers that need local state (the offline queue + relay
+// presence) get a clear, catchable error; an MCP session then degrades to online-only instead of the
+// whole process dying with an opaque "failed to connect".
+type Sqlite = typeof import('node:sqlite');
+let sqliteModule: Sqlite | undefined;
+function requireSqlite(): Sqlite {
+  if (sqliteModule) return sqliteModule;
+  try {
+    sqliteModule = createRequire(import.meta.url)('node:sqlite') as Sqlite;
+  } catch {
+    throw new Error(
+      'Local encrypted state needs Node 22.5+ (its built-in node:sqlite). The MCP session still works ' +
+        'without it (offline queue + presence disabled); upgrade Node to enable them.',
+    );
+  }
+  return sqliteModule;
+}
 
 export interface SecretStore {
   get(key: string): unknown;
@@ -10,13 +30,14 @@ export interface SecretStore {
   delete(key: string): void;
 }
 export class LocalState implements SecretStore {
-  db: DatabaseSync;
+  db: InstanceType<Sqlite['DatabaseSync']>;
   key: Buffer;
   constructor(path: string, masterKey: string) {
     if (!/^[a-fA-F0-9]{64}$/.test(masterKey))
       throw new Error(
         'BRAIN_VAULT_KEY must be a 64-character hexadecimal key. Keep it in your password manager or environment, separate from the state file.',
       );
+    const { DatabaseSync } = requireSqlite();
     this.key = Buffer.from(masterKey, 'hex');
     if (path !== ':memory:') {
       mkdirSync(dirname(resolve(path)), { recursive: true, mode: 0o700 });

@@ -3,10 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Participant client + stdio MCP server for CTF Brain / MCP Console — connect your CLI agent (Claude Code, Codex, ...) to your team's shared offensive-intelligence workspace.",
+  "description": "AI Brain — MCP Console: participant client + stdio MCP server that connects your CLI agent (Claude Code, Codex, ...) to your team's shared offensive-intelligence workspace.",
+  "bin": {
+    "ai-brain": "dist/cli.js"
+  },
   "scripts": {
-    "mcp": "tsx client/src/cli.ts mcp",
-    "ctf": "tsx client/src/cli.ts",
+    "build": "esbuild client/src/cli.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/cli.js",
+    "mcp": "node dist/cli.js mcp",
+    "mcp:src": "tsx client/src/cli.ts mcp",
+    "ctf": "node dist/cli.js",
+    "ctf:src": "tsx client/src/cli.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -17,10 +23,11 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/ws": "^8.18.0",
+    "esbuild": "^0.28.2",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=20"
   }
 }

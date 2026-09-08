@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { homedir } from 'node:os';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
@@ -17,7 +18,14 @@ const option = (name: string) => {
   const index = args.indexOf(`--${name}`);
   return index >= 0 ? args[index + 1] : undefined;
 };
-const stateDir = resolve(option('state-dir') || process.env.BRAIN_STATE_DIR || 'data/agent');
+// Expand a leading ~ ourselves — path.resolve does NOT, so a literal "~/.mcp-console" (e.g. copied
+// from a config file where the shell never expanded it) would otherwise create a bogus "~" directory
+// under the cwd. Default to an ABSOLUTE path under the home dir so state never lands in a random cwd
+// (an agent's working directory is not known in advance).
+const homeExpand = (p: string) => p.replace(/^~(?=$|[/\\])/, () => homedir());
+const stateDir = resolve(
+  homeExpand(option('state-dir') || process.env.BRAIN_STATE_DIR || resolve(homedir(), '.mcp-console')),
+);
 // Stable per-computer device id, stored beside the state so a personal API key locks to THIS machine
 // (the server binds it trust-on-first-use). Generated once; copying the token alone to another computer
 // will not carry this id, so the key is rejected there.
@@ -215,8 +223,12 @@ until you start it — there is no background terminal surveillance or unsolicit
     await getDeviceId(),
   );
   if (command === 'doctor') {
+    const [nodeMajor, nodeMinor] = process.versions.node.split('.').map(Number);
     const checks: any = {
       node: process.version,
+      // node:sqlite (offline queue + relay presence) is a Node >=22.5 built-in. The MCP session works
+      // without it — this only flags whether local-state features are available on this runtime.
+      localStateSupported: nodeMajor > 22 || (nodeMajor === 22 && nodeMinor >= 5),
       encryptedPersistence: /^[a-fA-F0-9]{64}$/.test(process.env.BRAIN_VAULT_KEY || ''),
       sessionConfigured: !!api.token,
       workspaceConfigured: !!api.ctfId,
@@ -250,10 +262,22 @@ until you start it — there is no background terminal surveillance or unsolicit
   }
   if (!api.token) throw new Error('Sign in with login, or supply BRAIN_TOKEN');
   if (command === 'mcp') {
-    const me = await api.request('/v1/me');
+    // A transient backend blip at startup must not kill the MCP server. Try to resolve identity (used
+    // to auto-select the token's workspace and to drive presence), but if that call fails and we
+    // ALREADY know the workspace, come up anyway and let individual tool calls surface backend errors
+    // with clear messages — instead of refusing to start with an opaque "failed to connect".
+    let me: any;
+    try {
+      me = await api.request('/v1/me');
+    } catch (e) {
+      if (!api.ctfId) throw e;
+      process.stderr.write(
+        `ai-brain: backend not reachable at startup (${(e as Error).message}); starting MCP anyway.\n`,
+      );
+    }
     // An API key from Settings is bound to a workspace, so resolve it from the token when BRAIN_CTF
     // (and any locally selected workspace) is absent.
-    if (!api.ctfId && me.ctfId) {
+    if (me && !api.ctfId && me.ctfId) {
       api.ctfId = me.ctfId;
       config.ctfId = me.ctfId;
       await save();
@@ -261,9 +285,10 @@ until you start it — there is no background terminal surveillance or unsolicit
     if (!api.ctfId) throw new Error('Select a workspace first');
     // Keep presence alive: the relay heartbeat is the only thing that refreshes devices.last_seen, so
     // without it the orchestrator sees this participant as offline and never auto-assigns. Best-effort
-    // (requires BRAIN_VAULT_KEY for local state) — an MCP session must not fail if the relay cannot start.
+    // (needs identity + BRAIN_VAULT_KEY for local state, and Node 22.5+) — an MCP session must not fail
+    // if the relay cannot start.
     try {
-      connectRelay(api, state(), me.user.id);
+      if (me?.user) connectRelay(api, state(), me.user.id);
     } catch {
       /* presence heartbeat is best-effort; MCP tools still work without it */
     }
