@@ -28,6 +28,8 @@ node --import tsx client/src/cli.ts keys
 
 On **Settings → Connect API keys**, generate a key (shown once — copy it). It carries your workspace, so `BRAIN_CTF` is not needed.
 
+Your API key **locks to the first computer that uses it** (it binds to a device id stored in `BRAIN_STATE_DIR`). The same token will not work from another machine — to move it, revoke the key and generate a new one on the new computer. This makes a leaked token useless elsewhere, and lets the backend tie every request to one user on one device.
+
 ## 3. Connect the MCP to your agent
 
 The MCP server is always the same command:
