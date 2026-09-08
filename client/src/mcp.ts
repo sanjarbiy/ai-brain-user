@@ -119,7 +119,7 @@ export function createMcp(api: BrainApi) {
     'ctf_check_duplicate',
     {
       description:
-        'Before starting meaningful work on a target, check what the team already recorded for it. Given a target and a short description of the intended activity, returns overlapping open or active tasks and prior recorded attempts, findings, and observations, each scored by similarity and labeled with provenance. Advisory only: CTF Brain surfaces prior work and never blocks, executes, or authorizes activity. When strong overlap exists, prefer reusing recorded results or choosing different work; the human decides.',
+        'Before starting meaningful work on a target, check what the team already recorded for it. Given a target and a short description of the intended activity, returns overlapping open or active tasks and prior recorded attempts, findings, and observations, each scored by similarity and labeled with provenance. Advisory only: AI Brain surfaces prior work and never blocks, executes, or authorizes activity. When strong overlap exists, prefer reusing recorded results or choosing different work; the human decides.',
       inputSchema: { targetId: Id, activity: z.string().min(1).max(200) },
       annotations: { readOnlyHint: true },
     },
@@ -134,7 +134,7 @@ export function createMcp(api: BrainApi) {
     'consult_brain',
     {
       description:
-        'Consult the CTF Brain backend — a powerful server-side offensive researcher/solver running on YOUR OpenRouter and Jina credentials. Send an authorized-CTF question when you want deep multi-hop web research, CVE/exploit lookups, or a candidate solution path for a target. The brain checks team knowledge first, then researches autonomously and returns sourced facts, hypotheses, and concrete next offensive steps; the result is persisted as reusable team knowledge (RESEARCHED provenance). Provide focused `queries` when you can; omit them and the brain derives them from the question. You still execute locally — this returns research and solutions, not actions.',
+        'Consult the AI Brain backend — a powerful server-side offensive researcher/solver running on YOUR OpenRouter and Jina credentials. Send an authorized-CTF question when you want deep multi-hop web research, CVE/exploit lookups, or a candidate solution path for a target. The brain checks team knowledge first, then researches autonomously and returns sourced facts, hypotheses, and concrete next offensive steps; the result is persisted as reusable team knowledge (RESEARCHED provenance). Provide focused `queries` when you can; omit them and the brain derives them from the question. You still execute locally — this returns research and solutions, not actions.',
       inputSchema: {
         question: z
           .string()
