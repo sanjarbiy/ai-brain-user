@@ -62,7 +62,7 @@ export class QueueingAdapter implements ParticipantAgentAdapter {
 }
 
 // Our own AI Brain agent can accept and run a structured task directly through the relay.
-export class CtfBrainAdapter implements ParticipantAgentAdapter {
+export class AiBrainAdapter implements ParticipantAgentAdapter {
   constructor(
     public name: string,
     private deps: { run: (task: AgentTask) => Promise<void>; available?: () => boolean },
