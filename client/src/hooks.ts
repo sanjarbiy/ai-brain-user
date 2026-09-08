@@ -27,7 +27,7 @@ export function generateHook(shell: ShellName, tools: string[] = SECURITY_TOOLS)
       shell === 'zsh'
         ? 'autoload -Uz add-zsh-hook; add-zsh-hook preexec ctf_brain_preexec'
         : 'trap \'ctf_brain_preexec "$BASH_COMMAND"\' DEBUG';
-    return `# CTF Brain optional shell hook (${shell}). Active only while CTF mode is on (CTF_MODE set).
+    return `# AI Brain optional shell hook (${shell}). Active only while CTF mode is on (CTF_MODE set).
 # It only prints a reminder to register configured tools with 'ctf run'. It runs, logs, transmits nothing.
 export CTF_BRAIN_TOOLS="${list}"
 ctf_brain_preexec() {
@@ -41,7 +41,7 @@ ${register}
 `;
   }
   if (shell === 'fish') {
-    return `# CTF Brain optional shell hook (fish). Active only while CTF mode is on (CTF_MODE set).
+    return `# AI Brain optional shell hook (fish). Active only while CTF mode is on (CTF_MODE set).
 set -gx CTF_BRAIN_TOOLS ${list}
 function ctf_brain_preexec --on-event fish_preexec
   test -n "$CTF_MODE"; or return 0
@@ -52,7 +52,7 @@ function ctf_brain_preexec --on-event fish_preexec
 end
 `;
   }
-  return `# CTF Brain optional shell hook (PowerShell). Active only while CTF mode is on ($env:CTF_MODE set).
+  return `# AI Brain optional shell hook (PowerShell). Active only while CTF mode is on ($env:CTF_MODE set).
 $env:CTF_BRAIN_TOOLS = "${list}"
 function global:Invoke-CtfBrainPreexec([string]$Line) {
   if (-not $env:CTF_MODE) { return }
