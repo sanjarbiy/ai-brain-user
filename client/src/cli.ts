@@ -237,24 +237,26 @@ until you start it — there is no background terminal surveillance or unsolicit
       identity: false,
       workspace: false,
     };
-    try {
-      await api.request('/health');
-      checks.api = true;
-    } catch {}
-    try {
-      await api.request('/v1/me');
-      checks.identity = true;
-    } catch {}
-    if (api.ctfId)
-      try {
-        await api.context();
-        checks.workspace = true;
-      } catch {}
-    try {
-      checks.brainKeys = (await api.request('/v1/participant/keys')).keys.map(
-        (k: { role: string }) => k.role,
-      );
-    } catch {}
+    // These four probes are independent read-only checks that each swallow their own error, so run
+    // them concurrently: a fully-down backend now costs a single ~15s timeout instead of up to four
+    // in series. allSettled preserves the per-check error isolation, the api.ctfId guard still skips
+    // the workspace probe, and `ready` is still derived from the same three flags afterwards.
+    await Promise.allSettled([
+      api.request('/health').then(() => {
+        checks.api = true;
+      }),
+      api.request('/v1/me').then(() => {
+        checks.identity = true;
+      }),
+      api.ctfId
+        ? api.context().then(() => {
+            checks.workspace = true;
+          })
+        : Promise.resolve(),
+      api.request('/v1/participant/keys').then((r) => {
+        checks.brainKeys = r.keys.map((k: { role: string }) => k.role);
+      }),
+    ]);
     checks.ready = checks.api && checks.identity && checks.workspace;
     print(checks);
     if (!checks.ready) process.exitCode = 1;

@@ -207,31 +207,27 @@ export type Snapshot = {
   cursor: string;
 };
 
-// Defense in depth, not a guarantee that arbitrary pasted content is secret-free.
+// Defense in depth, not a guarantee that arbitrary pasted content is secret-free. Patterns are
+// hoisted to module constants because redact() runs on every stored note/command; String#replace
+// resets a global regex's lastIndex on each call, so sharing one instance is equivalent to the
+// previous per-call literals. The replacement order below is unchanged.
+const REDACT_PRIVATE_KEY =
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
+const REDACT_KEY = /\b(?:sk-or-v1-|sk-|jina_)[A-Za-z0-9_-]{12,}\b/g;
+const REDACT_AUTH_HEADER =
+  /((?:authorization|proxy-authorization|cookie|set-cookie)\s*:\s*)[^\r\n]+/gi;
+const REDACT_SECRET_ASSIGN =
+  /((?:password|passwd|api[_-]?key|secret|access[_-]?token|refresh[_-]?token)\s*[=:]\s*)[^\s,;]+/gi;
 export function redact(text: string): string {
   return text
-    .replace(
-      /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
-      '[REDACTED PRIVATE KEY]',
-    )
-    .replace(/\b(?:sk-or-v1-|sk-|jina_)[A-Za-z0-9_-]{12,}\b/g, '[REDACTED KEY]')
-    .replace(
-      /((?:authorization|proxy-authorization|cookie|set-cookie)\s*:\s*)[^\r\n]+/gi,
-      '$1[REDACTED]',
-    )
-    .replace(
-      /((?:password|passwd|api[_-]?key|secret|access[_-]?token|refresh[_-]?token)\s*[=:]\s*)[^\s,;]+/gi,
-      '$1[REDACTED]',
-    );
+    .replace(REDACT_PRIVATE_KEY, '[REDACTED PRIVATE KEY]')
+    .replace(REDACT_KEY, '[REDACTED KEY]')
+    .replace(REDACT_AUTH_HEADER, '$1[REDACTED]')
+    .replace(REDACT_SECRET_ASSIGN, '$1[REDACTED]');
 }
+const WORD_RE = /[\p{L}\p{N}]{3,}/gu;
 export function overlap(a: string, b: string): number {
-  const words = (s: string) =>
-    new Set(
-      s
-        .toLowerCase()
-        .normalize('NFKC')
-        .match(/[\p{L}\p{N}]{3,}/gu) || [],
-    );
+  const words = (s: string) => new Set(s.toLowerCase().normalize('NFKC').match(WORD_RE) || []);
   const aa = words(a),
     bb = words(b),
     union = new Set([...aa, ...bb]);

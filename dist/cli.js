@@ -161,21 +161,28 @@ __export(readiness_exports, {
   capabilityInventory: () => capabilityInventory
 });
 function capabilityInventory(detect, input = {}) {
+  const probed = /* @__PURE__ */ new Map();
+  const detectOnce = (tool) => {
+    let hit = probed.get(tool);
+    if (hit === void 0) probed.set(tool, hit = detect(tool));
+    return hit;
+  };
   const categories = {};
-  for (const [category, tools] of Object.entries(TOOL_CATEGORIES))
-    categories[category] = {
-      present: tools.filter(detect),
-      missing: tools.filter((t) => !detect(t))
-    };
+  for (const [category, tools] of Object.entries(TOOL_CATEGORIES)) {
+    const present2 = [];
+    const missing = [];
+    for (const t of tools) (detectOnce(t) ? present2 : missing).push(t);
+    categories[category] = { present: present2, missing };
+  }
   const relevant = input.category ? ["base", input.category] : ["base"];
   const relevantTools = [...new Set(relevant.flatMap((c) => TOOL_CATEGORIES[c]))];
-  const missingRequired = [...new Set(relevantTools.filter((t) => !detect(t)))];
+  const missingRequired = [...new Set(relevantTools.filter((t) => !detectOnce(t)))];
   const missingOptional = [
     ...new Set(
       Object.keys(TOOL_CATEGORIES).filter((c) => !relevant.includes(c)).flatMap((c) => categories[c].missing)
     )
   ];
-  const present = relevantTools.filter(detect).length;
+  const present = relevantTools.filter(detectOnce).length;
   const score = relevantTools.length ? Math.round(present / relevantTools.length * 100) : 100;
   const ready = missingRequired.length === 0;
   const health = !ready ? "RED" : missingOptional.length ? "YELLOW" : "GREEN";
@@ -217,19 +224,34 @@ function parseToolOutput(output, ctx = {}) {
     summary: `${chosen.name}: ${observations.length} observation(s) extracted.`
   };
 }
-var lines, named, nmapParser, rustscanParser, ffufParser, gobusterParser, feroxbusterParser, httpxParser, nucleiParser, curlParser, sqlmapParser, parsers;
+var lines, named, NMAP_LINE, RUSTSCAN_LINE, FFUF_LINE, GOBUSTER_LINE, FEROXBUSTER_LINE, HTTPX_LINE, NUCLEI_LINE, CURL_HEADERS, SQLMAP_SIGNAL, SQLMAP_PARAM, nmapParser, rustscanParser, ffufParser, gobusterParser, feroxbusterParser, httpxParser, nucleiParser, curlParser, sqlmapParser, parsers;
 var init_parsers = __esm({
   "shared/src/parsers.ts"() {
     "use strict";
     lines = (output) => output.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     named = (ctx, name) => (ctx.tool || ctx.command || "").toLowerCase().includes(name);
+    NMAP_LINE = /^(\d+)\/(tcp|udp)\s+open\s+(\S+)(?:\s+(.*))?$/i;
+    RUSTSCAN_LINE = /^Open\s+(\S+):(\d+)/i;
+    FFUF_LINE = /^(\S+)\s+\[Status:\s*(\d+),\s*Size:\s*(\d+)/i;
+    GOBUSTER_LINE = /^(\/\S*)\s+\(Status:\s*(\d+)\)/i;
+    FEROXBUSTER_LINE = /^(\d{3})\s+\w+\s+\d+l\s+\d+w\s+\d+c\s+(\S+)/i;
+    HTTPX_LINE = /^(https?:\/\/\S+)\s+\[(\d{3})\]\s*(?:\[([^\]]*)\])?\s*(?:\[([^\]]*)\])?/i;
+    NUCLEI_LINE = /^\[([^\]]+)\]\s+\[[^\]]+\]\s+\[(info|low|medium|high|critical)\]\s+(\S+)/i;
+    CURL_HEADERS = [
+      ["Server", /^Server:\s*(.+)$/im],
+      ["X-Powered-By", /^X-Powered-By:\s*(.+)$/im],
+      ["Location", /^Location:\s*(.+)$/im],
+      ["WWW-Authenticate", /^WWW-Authenticate:\s*(.+)$/im]
+    ];
+    SQLMAP_SIGNAL = /injection point|is vulnerable|sqlmap identified/i;
+    SQLMAP_PARAM = /^Parameter:\s*(\S+)/gim;
     nmapParser = {
       name: "nmap",
       canParse: (ctx, output) => named(ctx, "nmap") || /^\d+\/(tcp|udp)\s+open/im.test(output),
       parse(output) {
         const obs = [];
         for (const line of lines(output)) {
-          const m = line.match(/^(\d+)\/(tcp|udp)\s+open\s+(\S+)(?:\s+(.*))?$/i);
+          const m = line.match(NMAP_LINE);
           if (!m) continue;
           const [, port, proto, service, version] = m;
           obs.push({
@@ -248,7 +270,7 @@ var init_parsers = __esm({
       parse(output) {
         const obs = [];
         for (const line of lines(output)) {
-          const m = line.match(/^Open\s+(\S+):(\d+)/i);
+          const m = line.match(RUSTSCAN_LINE);
           if (m)
             obs.push({
               kind: "observation",
@@ -266,7 +288,7 @@ var init_parsers = __esm({
       parse(output) {
         const obs = [];
         for (const line of lines(output)) {
-          const m = line.match(/^(\S+)\s+\[Status:\s*(\d+),\s*Size:\s*(\d+)/i);
+          const m = line.match(FFUF_LINE);
           if (m)
             obs.push({
               kind: "observation",
@@ -284,7 +306,7 @@ var init_parsers = __esm({
       parse(output) {
         const obs = [];
         for (const line of lines(output)) {
-          const m = line.match(/^(\/\S*)\s+\(Status:\s*(\d+)\)/i);
+          const m = line.match(GOBUSTER_LINE);
           if (m)
             obs.push({
               kind: "observation",
@@ -302,7 +324,7 @@ var init_parsers = __esm({
       parse(output) {
         const obs = [];
         for (const line of lines(output)) {
-          const m = line.match(/^(\d{3})\s+\w+\s+\d+l\s+\d+w\s+\d+c\s+(\S+)/i);
+          const m = line.match(FEROXBUSTER_LINE);
           if (m)
             obs.push({
               kind: "observation",
@@ -320,9 +342,7 @@ var init_parsers = __esm({
       parse(output) {
         const obs = [];
         for (const line of lines(output)) {
-          const m = line.match(
-            /^(https?:\/\/\S+)\s+\[(\d{3})\]\s*(?:\[([^\]]*)\])?\s*(?:\[([^\]]*)\])?/i
-          );
+          const m = line.match(HTTPX_LINE);
           if (m)
             obs.push({
               kind: "observation",
@@ -340,9 +360,7 @@ var init_parsers = __esm({
       parse(output) {
         const obs = [];
         for (const line of lines(output)) {
-          const m = line.match(
-            /^\[([^\]]+)\]\s+\[[^\]]+\]\s+\[(info|low|medium|high|critical)\]\s+(\S+)/i
-          );
+          const m = line.match(NUCLEI_LINE);
           if (!m) continue;
           const severity = m[2].toLowerCase();
           obs.push({
@@ -368,8 +386,8 @@ var init_parsers = __esm({
             body: `Response status ${status[1]}${status[2] ? ` (${status[2].trim()})` : ""}.`,
             data: { status: Number(status[1]) }
           });
-        for (const header of ["Server", "X-Powered-By", "Location", "WWW-Authenticate"]) {
-          const h = output.match(new RegExp(`^${header}:\\s*(.+)$`, "im"));
+        for (const [header, re] of CURL_HEADERS) {
+          const h = output.match(re);
           if (h)
             obs.push({
               kind: "observation",
@@ -383,10 +401,10 @@ var init_parsers = __esm({
     };
     sqlmapParser = {
       name: "sqlmap",
-      canParse: (ctx, output) => named(ctx, "sqlmap") || /injection point|is vulnerable|sqlmap identified/i.test(output),
+      canParse: (ctx, output) => named(ctx, "sqlmap") || SQLMAP_SIGNAL.test(output),
       parse(output) {
         const obs = [];
-        const params = [...output.matchAll(/^Parameter:\s*(\S+)/gim)].map((m) => m[1]);
+        const params = [...output.matchAll(SQLMAP_PARAM)].map((m) => m[1]);
         for (const p of params)
           obs.push({
             kind: "finding",
@@ -394,7 +412,7 @@ var init_parsers = __esm({
             body: `sqlmap reported injection potential in parameter ${p}. Confirm against the target before treating it as a finding.`,
             data: { parameter: p }
           });
-        if (!params.length && /injection point|is vulnerable|sqlmap identified/i.test(output))
+        if (!params.length && SQLMAP_SIGNAL.test(output))
           obs.push({
             kind: "finding",
             title: "sqlmap reported a possible injection point",
@@ -531,6 +549,7 @@ function requireSqlite() {
 var LocalState = class {
   db;
   key;
+  statements = /* @__PURE__ */ new Map();
   constructor(path, masterKey) {
     if (!/^[a-fA-F0-9]{64}$/.test(masterKey))
       throw new Error(
@@ -565,38 +584,58 @@ var LocalState = class {
       );
     }
   }
+  // node:sqlite compiles SQL on every prepare() call and does not cache. Every statement here has
+  // constant SQL and is re-run with fresh bound params, so compile each once per connection and reuse
+  // it. Results are identical; only the per-call compile is avoided (matters in the relay flush loop
+  // and the per-sync set() calls). Statements share this.db's lifetime and are discarded with it.
+  stmt(sql) {
+    let cached = this.statements.get(sql);
+    if (!cached) {
+      cached = this.db.prepare(sql);
+      this.statements.set(sql, cached);
+    }
+    return cached;
+  }
   get(key) {
-    const row = this.db.prepare("SELECT value FROM secrets WHERE key=?").get(key);
+    const row = this.stmt("SELECT value FROM secrets WHERE key=?").get(key);
     return row ? this.open(String(row.value)) : void 0;
   }
   set(key, value) {
-    this.db.prepare(
+    this.stmt(
       "INSERT INTO secrets(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value"
     ).run(key, this.seal(value));
   }
   delete(key) {
-    this.db.prepare("DELETE FROM secrets WHERE key=?").run(key);
+    this.stmt("DELETE FROM secrets WHERE key=?").run(key);
   }
   enqueue(scope, id, command2) {
     if (command2.type !== "entry.add")
       throw new Error(
         "Only submitted notes/evidence may be queued offline; task decisions require a live server"
       );
-    this.db.prepare("INSERT INTO outbox(id,scope,value,created_at) VALUES(?,?,?,?)").run(id, scope, this.seal(command2), (/* @__PURE__ */ new Date()).toISOString());
+    this.stmt("INSERT INTO outbox(id,scope,value,created_at) VALUES(?,?,?,?)").run(
+      id,
+      scope,
+      this.seal(command2),
+      (/* @__PURE__ */ new Date()).toISOString()
+    );
   }
   pending(scope) {
-    return this.db.prepare(
+    return this.stmt(
       "SELECT * FROM outbox WHERE scope=? AND status='PENDING' ORDER BY created_at LIMIT 200"
     ).all(scope).map((r) => ({ id: String(r.id), command: this.open(String(r.value)) }));
   }
   sent(id) {
-    this.db.prepare("DELETE FROM outbox WHERE id=?").run(id);
+    this.stmt("DELETE FROM outbox WHERE id=?").run(id);
   }
   failed(id, error) {
-    this.db.prepare("UPDATE outbox SET status='NEEDS_REVIEW',error=? WHERE id=?").run(this.seal(error), id);
+    this.stmt("UPDATE outbox SET status='NEEDS_REVIEW',error=? WHERE id=?").run(
+      this.seal(error),
+      id
+    );
   }
   failures(scope) {
-    return this.db.prepare("SELECT id,error FROM outbox WHERE scope=? AND status='NEEDS_REVIEW'").all(scope).map((r) => ({ id: r.id, error: this.open(String(r.error)) }));
+    return this.stmt("SELECT id,error FROM outbox WHERE scope=? AND status='NEEDS_REVIEW'").all(scope).map((r) => ({ id: r.id, error: this.open(String(r.error)) }));
   }
   close() {
     this.db.close();
@@ -859,22 +898,18 @@ var Command = z.discriminatedUnion("type", [
 ]);
 var Envelope = z.object({ idempotencyKey: Id, command: Command }).strict();
 var WorkspaceInput = z.object({ name: Label, description: Body, scope: z.array(Label).min(1).max(200) }).strict();
+var REDACT_PRIVATE_KEY = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
+var REDACT_KEY = /\b(?:sk-or-v1-|sk-|jina_)[A-Za-z0-9_-]{12,}\b/g;
+var REDACT_AUTH_HEADER = /((?:authorization|proxy-authorization|cookie|set-cookie)\s*:\s*)[^\r\n]+/gi;
+var REDACT_SECRET_ASSIGN = /((?:password|passwd|api[_-]?key|secret|access[_-]?token|refresh[_-]?token)\s*[=:]\s*)[^\s,;]+/gi;
 function redact(text) {
-  return text.replace(
-    /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
-    "[REDACTED PRIVATE KEY]"
-  ).replace(/\b(?:sk-or-v1-|sk-|jina_)[A-Za-z0-9_-]{12,}\b/g, "[REDACTED KEY]").replace(
-    /((?:authorization|proxy-authorization|cookie|set-cookie)\s*:\s*)[^\r\n]+/gi,
-    "$1[REDACTED]"
-  ).replace(
-    /((?:password|passwd|api[_-]?key|secret|access[_-]?token|refresh[_-]?token)\s*[=:]\s*)[^\s,;]+/gi,
-    "$1[REDACTED]"
-  );
+  return text.replace(REDACT_PRIVATE_KEY, "[REDACTED PRIVATE KEY]").replace(REDACT_KEY, "[REDACTED KEY]").replace(REDACT_AUTH_HEADER, "$1[REDACTED]").replace(REDACT_SECRET_ASSIGN, "$1[REDACTED]");
 }
 
 // shared/src/rollup.ts
 function targetRollup(snapshot, targetId) {
-  const nameOf = (id) => snapshot.participants.find((p) => p.id === id)?.name ?? "Unknown";
+  const nameById = new Map(snapshot.participants.map((p) => [p.id, p.name]));
+  const nameOf = (id) => nameById.get(id) ?? "Unknown";
   const target2 = snapshot.targets.find((t) => t.id === targetId);
   const tasks = snapshot.tasks.filter((t) => t.target_id === targetId);
   const entries = snapshot.entries.filter((e) => e.target_id === targetId);
@@ -2056,28 +2091,20 @@ until you start it \u2014 there is no background terminal surveillance or unsoli
       identity: false,
       workspace: false
     };
-    try {
-      await api.request("/health");
-      checks.api = true;
-    } catch {
-    }
-    try {
-      await api.request("/v1/me");
-      checks.identity = true;
-    } catch {
-    }
-    if (api.ctfId)
-      try {
-        await api.context();
+    await Promise.allSettled([
+      api.request("/health").then(() => {
+        checks.api = true;
+      }),
+      api.request("/v1/me").then(() => {
+        checks.identity = true;
+      }),
+      api.ctfId ? api.context().then(() => {
         checks.workspace = true;
-      } catch {
-      }
-    try {
-      checks.brainKeys = (await api.request("/v1/participant/keys")).keys.map(
-        (k) => k.role
-      );
-    } catch {
-    }
+      }) : Promise.resolve(),
+      api.request("/v1/participant/keys").then((r) => {
+        checks.brainKeys = r.keys.map((k) => k.role);
+      })
+    ]);
     checks.ready = checks.api && checks.identity && checks.workspace;
     print(checks);
     if (!checks.ready) process.exitCode = 1;
