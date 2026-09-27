@@ -32,13 +32,32 @@ const lines = (output: string) =>
 const named = (ctx: ToolContext, name: string) =>
   (ctx.tool || ctx.command || '').toLowerCase().includes(name);
 
+// Per-line parse regexes hoisted to module scope: a tool output with many lines previously allocated
+// a fresh RegExp per line (curl rebuilt 4 from a string every call). All are used only with
+// String#match/#matchAll (which reset or clone lastIndex), so one shared instance is equivalent.
+const NMAP_LINE = /^(\d+)\/(tcp|udp)\s+open\s+(\S+)(?:\s+(.*))?$/i;
+const RUSTSCAN_LINE = /^Open\s+(\S+):(\d+)/i;
+const FFUF_LINE = /^(\S+)\s+\[Status:\s*(\d+),\s*Size:\s*(\d+)/i;
+const GOBUSTER_LINE = /^(\/\S*)\s+\(Status:\s*(\d+)\)/i;
+const FEROXBUSTER_LINE = /^(\d{3})\s+\w+\s+\d+l\s+\d+w\s+\d+c\s+(\S+)/i;
+const HTTPX_LINE = /^(https?:\/\/\S+)\s+\[(\d{3})\]\s*(?:\[([^\]]*)\])?\s*(?:\[([^\]]*)\])?/i;
+const NUCLEI_LINE = /^\[([^\]]+)\]\s+\[[^\]]+\]\s+\[(info|low|medium|high|critical)\]\s+(\S+)/i;
+const CURL_HEADERS = [
+  ['Server', /^Server:\s*(.+)$/im],
+  ['X-Powered-By', /^X-Powered-By:\s*(.+)$/im],
+  ['Location', /^Location:\s*(.+)$/im],
+  ['WWW-Authenticate', /^WWW-Authenticate:\s*(.+)$/im],
+] as const;
+const SQLMAP_SIGNAL = /injection point|is vulnerable|sqlmap identified/i;
+const SQLMAP_PARAM = /^Parameter:\s*(\S+)/gim;
+
 export const nmapParser: ToolParser = {
   name: 'nmap',
   canParse: (ctx, output) => named(ctx, 'nmap') || /^\d+\/(tcp|udp)\s+open/im.test(output),
   parse(output) {
     const obs: ParsedObservation[] = [];
     for (const line of lines(output)) {
-      const m = line.match(/^(\d+)\/(tcp|udp)\s+open\s+(\S+)(?:\s+(.*))?$/i);
+      const m = line.match(NMAP_LINE);
       if (!m) continue;
       const [, port, proto, service, version] = m;
       obs.push({
@@ -58,7 +77,7 @@ export const rustscanParser: ToolParser = {
   parse(output) {
     const obs: ParsedObservation[] = [];
     for (const line of lines(output)) {
-      const m = line.match(/^Open\s+(\S+):(\d+)/i);
+      const m = line.match(RUSTSCAN_LINE);
       if (m)
         obs.push({
           kind: 'observation',
@@ -77,7 +96,7 @@ export const ffufParser: ToolParser = {
   parse(output) {
     const obs: ParsedObservation[] = [];
     for (const line of lines(output)) {
-      const m = line.match(/^(\S+)\s+\[Status:\s*(\d+),\s*Size:\s*(\d+)/i);
+      const m = line.match(FFUF_LINE);
       if (m)
         obs.push({
           kind: 'observation',
@@ -96,7 +115,7 @@ export const gobusterParser: ToolParser = {
   parse(output) {
     const obs: ParsedObservation[] = [];
     for (const line of lines(output)) {
-      const m = line.match(/^(\/\S*)\s+\(Status:\s*(\d+)\)/i);
+      const m = line.match(GOBUSTER_LINE);
       if (m)
         obs.push({
           kind: 'observation',
@@ -116,7 +135,7 @@ export const feroxbusterParser: ToolParser = {
   parse(output) {
     const obs: ParsedObservation[] = [];
     for (const line of lines(output)) {
-      const m = line.match(/^(\d{3})\s+\w+\s+\d+l\s+\d+w\s+\d+c\s+(\S+)/i);
+      const m = line.match(FEROXBUSTER_LINE);
       if (m)
         obs.push({
           kind: 'observation',
@@ -135,9 +154,7 @@ export const httpxParser: ToolParser = {
   parse(output) {
     const obs: ParsedObservation[] = [];
     for (const line of lines(output)) {
-      const m = line.match(
-        /^(https?:\/\/\S+)\s+\[(\d{3})\]\s*(?:\[([^\]]*)\])?\s*(?:\[([^\]]*)\])?/i,
-      );
+      const m = line.match(HTTPX_LINE);
       if (m)
         obs.push({
           kind: 'observation',
@@ -158,9 +175,7 @@ export const nucleiParser: ToolParser = {
   parse(output) {
     const obs: ParsedObservation[] = [];
     for (const line of lines(output)) {
-      const m = line.match(
-        /^\[([^\]]+)\]\s+\[[^\]]+\]\s+\[(info|low|medium|high|critical)\]\s+(\S+)/i,
-      );
+      const m = line.match(NUCLEI_LINE);
       if (!m) continue;
       const severity = m[2].toLowerCase();
       obs.push({
@@ -187,8 +202,8 @@ export const curlParser: ToolParser = {
         body: `Response status ${status[1]}${status[2] ? ` (${status[2].trim()})` : ''}.`,
         data: { status: Number(status[1]) },
       });
-    for (const header of ['Server', 'X-Powered-By', 'Location', 'WWW-Authenticate']) {
-      const h = output.match(new RegExp(`^${header}:\\s*(.+)$`, 'im'));
+    for (const [header, re] of CURL_HEADERS) {
+      const h = output.match(re);
       if (h)
         obs.push({
           kind: 'observation',
@@ -204,10 +219,10 @@ export const curlParser: ToolParser = {
 export const sqlmapParser: ToolParser = {
   name: 'sqlmap',
   canParse: (ctx, output) =>
-    named(ctx, 'sqlmap') || /injection point|is vulnerable|sqlmap identified/i.test(output),
+    named(ctx, 'sqlmap') || SQLMAP_SIGNAL.test(output),
   parse(output) {
     const obs: ParsedObservation[] = [];
-    const params = [...output.matchAll(/^Parameter:\s*(\S+)/gim)].map((m) => m[1]);
+    const params = [...output.matchAll(SQLMAP_PARAM)].map((m) => m[1]);
     for (const p of params)
       obs.push({
         kind: 'finding',
@@ -215,7 +230,7 @@ export const sqlmapParser: ToolParser = {
         body: `sqlmap reported injection potential in parameter ${p}. Confirm against the target before treating it as a finding.`,
         data: { parameter: p },
       });
-    if (!params.length && /injection point|is vulnerable|sqlmap identified/i.test(output))
+    if (!params.length && SQLMAP_SIGNAL.test(output))
       obs.push({
         kind: 'finding',
         title: 'sqlmap reported a possible injection point',

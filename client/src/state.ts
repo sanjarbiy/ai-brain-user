@@ -23,6 +23,7 @@ function requireSqlite(): Sqlite {
   }
   return sqliteModule;
 }
+type PreparedStatement = ReturnType<InstanceType<Sqlite['DatabaseSync']>['prepare']>;
 
 export interface SecretStore {
   get(key: string): unknown;
@@ -32,6 +33,7 @@ export interface SecretStore {
 export class LocalState implements SecretStore {
   db: InstanceType<Sqlite['DatabaseSync']>;
   key: Buffer;
+  private statements = new Map<string, PreparedStatement>();
   constructor(path: string, masterKey: string) {
     if (!/^[a-fA-F0-9]{64}$/.test(masterKey))
       throw new Error(
@@ -68,48 +70,60 @@ export class LocalState implements SecretStore {
       );
     }
   }
+  // node:sqlite compiles SQL on every prepare() call and does not cache. Every statement here has
+  // constant SQL and is re-run with fresh bound params, so compile each once per connection and reuse
+  // it. Results are identical; only the per-call compile is avoided (matters in the relay flush loop
+  // and the per-sync set() calls). Statements share this.db's lifetime and are discarded with it.
+  private stmt(sql: string): PreparedStatement {
+    let cached = this.statements.get(sql);
+    if (!cached) {
+      cached = this.db.prepare(sql);
+      this.statements.set(sql, cached);
+    }
+    return cached;
+  }
   get(key: string): any {
-    const row = this.db.prepare('SELECT value FROM secrets WHERE key=?').get(key);
+    const row = this.stmt('SELECT value FROM secrets WHERE key=?').get(key);
     return row ? this.open(String(row.value)) : undefined;
   }
   set(key: string, value: unknown) {
-    this.db
-      .prepare(
-        'INSERT INTO secrets(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
-      )
-      .run(key, this.seal(value));
+    this.stmt(
+      'INSERT INTO secrets(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+    ).run(key, this.seal(value));
   }
   delete(key: string) {
-    this.db.prepare('DELETE FROM secrets WHERE key=?').run(key);
+    this.stmt('DELETE FROM secrets WHERE key=?').run(key);
   }
   enqueue(scope: string, id: string, command: Command) {
     if (command.type !== 'entry.add')
       throw new Error(
         'Only submitted notes/evidence may be queued offline; task decisions require a live server',
       );
-    this.db
-      .prepare('INSERT INTO outbox(id,scope,value,created_at) VALUES(?,?,?,?)')
-      .run(id, scope, this.seal(command), new Date().toISOString());
+    this.stmt('INSERT INTO outbox(id,scope,value,created_at) VALUES(?,?,?,?)').run(
+      id,
+      scope,
+      this.seal(command),
+      new Date().toISOString(),
+    );
   }
   pending(scope: string) {
-    return this.db
-      .prepare(
-        "SELECT * FROM outbox WHERE scope=? AND status='PENDING' ORDER BY created_at LIMIT 200",
-      )
+    return this.stmt(
+      "SELECT * FROM outbox WHERE scope=? AND status='PENDING' ORDER BY created_at LIMIT 200",
+    )
       .all(scope)
       .map((r) => ({ id: String(r.id), command: this.open(String(r.value)) as Command }));
   }
   sent(id: string) {
-    this.db.prepare('DELETE FROM outbox WHERE id=?').run(id);
+    this.stmt('DELETE FROM outbox WHERE id=?').run(id);
   }
   failed(id: string, error: string) {
-    this.db
-      .prepare("UPDATE outbox SET status='NEEDS_REVIEW',error=? WHERE id=?")
-      .run(this.seal(error), id);
+    this.stmt("UPDATE outbox SET status='NEEDS_REVIEW',error=? WHERE id=?").run(
+      this.seal(error),
+      id,
+    );
   }
   failures(scope: string) {
-    return this.db
-      .prepare("SELECT id,error FROM outbox WHERE scope=? AND status='NEEDS_REVIEW'")
+    return this.stmt("SELECT id,error FROM outbox WHERE scope=? AND status='NEEDS_REVIEW'")
       .all(scope)
       .map((r) => ({ id: r.id, error: this.open(String(r.error)) }));
   }

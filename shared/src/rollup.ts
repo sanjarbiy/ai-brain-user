@@ -18,8 +18,10 @@ export type TargetRollup = {
 };
 
 export function targetRollup(snapshot: Snapshot, targetId: string): TargetRollup {
-  const nameOf = (id: string | null | undefined) =>
-    snapshot.participants.find((p) => p.id === id)?.name ?? 'Unknown';
+  // Index participants by id once instead of a linear .find() per owned task below. ids are unique,
+  // so Map.get returns exactly what .find did (and get(null/undefined) is undefined -> 'Unknown').
+  const nameById = new Map(snapshot.participants.map((p) => [p.id, p.name] as const));
+  const nameOf = (id: string | null | undefined) => nameById.get(id) ?? 'Unknown';
   const target = snapshot.targets.find((t) => t.id === targetId);
   const tasks = snapshot.tasks.filter((t) => t.target_id === targetId);
   const entries = snapshot.entries.filter((e) => e.target_id === targetId);
